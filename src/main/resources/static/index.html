@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Telemetry Ingestion Console</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --panel: #1e293b;
+            --panel-2: #273449;
+            --border: #334155;
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --accent: #38bdf8;
+            --accent-2: #22c55e;
+            --late: #f87171;
+            --ooo: #fbbf24;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+        header {
+            padding: 20px 28px;
+            border-bottom: 1px solid var(--border);
+            background: var(--panel);
+        }
+        header h1 { margin: 0; font-size: 20px; }
+        header p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+        .wrap {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+            padding: 24px 28px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .full { grid-column: 1 / -1; }
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px;
+        }
+        .card h2 { margin: 0 0 14px; font-size: 15px; }
+        label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+        input, textarea {
+            width: 100%;
+            padding: 9px 11px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--panel-2);
+            color: var(--text);
+            font-size: 13px;
+            font-family: inherit;
+        }
+        textarea { resize: vertical; min-height: 60px; font-family: ui-monospace, Menlo, monospace; }
+        .row { display: flex; gap: 10px; }
+        .row > div { flex: 1; }
+        button {
+            margin-top: 14px;
+            padding: 9px 16px;
+            border: none;
+            border-radius: 8px;
+            background: var(--accent);
+            color: #04222e;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        button.secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+        button.ghost { background: transparent; color: var(--accent); }
+        button:hover { filter: brightness(1.08); }
+        .btn-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .hint { font-size: 11px; color: var(--muted); margin-top: 8px; }
+        pre {
+            background: #0b1220;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            overflow: auto;
+            max-height: 260px;
+            font-size: 12px;
+            margin: 12px 0 0;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
+        th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--border); }
+        th { color: var(--muted); font-weight: 600; }
+        .tag { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+        .ON_TIME { background: rgba(34,197,94,.15); color: var(--accent-2); }
+        .OUT_OF_ORDER { background: rgba(251,191,36,.15); color: var(--ooo); }
+        .LATE { background: rgba(248,113,113,.15); color: var(--late); }
+        .status { font-size: 12px; margin-top: 8px; }
+        .ok { color: var(--accent-2); }
+        .err { color: var(--late); }
+        .count { color: var(--muted); font-size: 12px; font-weight: 400; }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Telemetry Ingestion Console</h1>
+    <p>Send device payloads and inspect the normalized downstream stream. <strong>The read/inspection endpoints
+        (GET /api/v1/events) are for testing and visualisation only</strong> &mdash; a real consumer would read from the sink downstream.</p>
+</header>
+
+<div class="wrap">
+    <!-- Temperature -->
+    <div class="card">
+        <h2>Temperature (NUMERIC)</h2>
+        <div class="row">
+            <div>
+                <label>Device ID</label>
+                <input id="tempDeviceId" value="temp-1"/>
+            </div>
+            <div>
+                <label>Temperature value</label>
+                <input id="tempValue" type="number" step="0.1" value="21.5"/>
+            </div>
+        </div>
+        <label>Recorded at (ISO-8601 UTC)</label>
+        <div class="row">
+            <div><input id="tempRecordedAt"/></div>
+            <div style="flex:0 0 auto"><button class="secondary" type="button" onclick="setNow('tempRecordedAt')">Now</button></div>
+        </div>
+        <div class="btn-row">
+            <button type="button" onclick="sendTemperature()">POST /ingest/temperature</button>
+        </div>
+        <div id="tempStatus" class="status"></div>
+        <pre id="tempResult" hidden></pre>
+    </div>
+
+    <!-- Vibration -->
+    <div class="card">
+        <h2>Vibration (BURSTY)</h2>
+        <div class="row">
+            <div>
+                <label>Device ID</label>
+                <input id="vibDeviceId" value="vib-1"/>
+            </div>
+            <div>
+                <label>Samples (comma separated)</label>
+                <input id="vibSamples" value="0.1, 0.2, 0.3, 0.4"/>
+            </div>
+        </div>
+        <label>Recorded at (ISO-8601 UTC)</label>
+        <div class="row">
+            <div><input id="vibRecordedAt"/></div>
+            <div style="flex:0 0 auto"><button class="secondary" type="button" onclick="setNow('vibRecordedAt')">Now</button></div>
+        </div>
+        <div class="btn-row">
+            <button type="button" onclick="sendVibration()">POST /ingest/vibration</button>
+            <button type="button" class="ghost" onclick="setLate('vibRecordedAt')">Simulate late (-2m)</button>
+        </div>
+        <div id="vibStatus" class="status"></div>
+        <pre id="vibResult" hidden></pre>
+    </div>
+
+    <!-- Downstream -->
+    <div class="card full">
+        <h2>Downstream normalized events <span id="eventCount" class="count"></span></h2>
+        <div class="btn-row">
+            <div style="flex:1">
+                <input id="filterDeviceId" placeholder="Filter by deviceId (optional)"/>
+            </div>
+            <button type="button" onclick="loadEvents()">GET /events</button>
+            <button type="button" class="secondary" onclick="loadLate()">GET /events/late</button>
+            <button type="button" class="ghost" onclick="clearTable()">Clear view</button>
+        </div>
+        <div class="hint">Lateness is computed per device against a watermark (highest timestamp seen). Late events also appear in <code>/events/late</code>.</div>
+        <div id="eventsStatus" class="status"></div>
+        <table id="eventsTable">
+            <thead>
+            <tr>
+                <th>Device</th>
+                <th>Type</th>
+                <th>Timestamp</th>
+                <th>Lateness</th>
+                <th>Metrics</th>
+                <th>Ingested at</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const BASE = '/api/v1';
+
+    function nowIso() {
+        return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+    }
+    function setNow(id) { document.getElementById(id).value = nowIso(); }
+    function setLate(id) {
+        const d = new Date(Date.now() - 2 * 60 * 1000);
+        document.getElementById(id).value = d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+    }
+
+    // default timestamps
+    setNow('tempRecordedAt');
+    setNow('vibRecordedAt');
+
+    function showStatus(id, ok, msg) {
+        const el = document.getElementById(id);
+        el.className = 'status ' + (ok ? 'ok' : 'err');
+        el.textContent = msg;
+    }
+
+    async function postJson(path, body, statusId, resultId) {
+        try {
+            const res = await fetch(BASE + path, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const text = await res.text();
+            const pretty = (() => { try { return JSON.stringify(JSON.parse(text), null, 2); } catch { return text; } })();
+            const pre = document.getElementById(resultId);
+            pre.hidden = false;
+            pre.textContent = pretty;
+            if (res.ok) {
+                showStatus(statusId, true, 'HTTP ' + res.status + ' OK');
+                loadEvents();
+            } else {
+                showStatus(statusId, false, 'HTTP ' + res.status + ' - request rejected');
+            }
+        } catch (e) {
+            showStatus(statusId, false, 'Network error: ' + e.message);
+        }
+    }
+
+    function sendTemperature() {
+        const body = {
+            deviceId: document.getElementById('tempDeviceId').value.trim(),
+            temperatureValue: parseFloat(document.getElementById('tempValue').value),
+            recordedAt: document.getElementById('tempRecordedAt').value.trim()
+        };
+        postJson('/ingest/temperature', body, 'tempStatus', 'tempResult');
+    }
+
+    function sendVibration() {
+        const samples = document.getElementById('vibSamples').value
+            .split(',').map(s => s.trim()).filter(s => s.length).map(Number);
+        const body = {
+            deviceId: document.getElementById('vibDeviceId').value.trim(),
+            samples: samples,
+            recordedAt: document.getElementById('vibRecordedAt').value.trim()
+        };
+        postJson('/ingest/vibration', body, 'vibStatus', 'vibResult');
+    }
+
+    function renderRows(events) {
+        const tbody = document.querySelector('#eventsTable tbody');
+        tbody.innerHTML = '';
+        document.getElementById('eventCount').textContent = '(' + events.length + ')';
+        events.forEach(ev => {
+            const lateness = (ev.metrics && ev.metrics.lateness) || (ev.isLate ? 'LATE' : 'ON_TIME');
+            const metrics = Object.entries(ev.metrics || {})
+                .filter(([k]) => k !== 'lateness')
+                .map(([k, v]) => k + '=' + v).join(', ');
+            const tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td>' + ev.deviceId + '</td>' +
+                '<td>' + ev.deviceType + '</td>' +
+                '<td>' + ev.timestamp + '</td>' +
+                '<td><span class="tag ' + lateness + '">' + lateness + '</span></td>' +
+                '<td>' + metrics + '</td>' +
+                '<td>' + ev.ingestedAt + '</td>';
+            tbody.appendChild(tr);
+        });
+    }
+
+    async function fetchEvents(path, label) {
+        try {
+            const res = await fetch(BASE + path);
+            const data = await res.json();
+            renderRows(data);
+            showStatus('eventsStatus', true, label + ' - ' + data.length + ' event(s)');
+        } catch (e) {
+            showStatus('eventsStatus', false, 'Network error: ' + e.message);
+        }
+    }
+
+    function loadEvents() {
+        const id = document.getElementById('filterDeviceId').value.trim();
+        const q = id ? ('?deviceId=' + encodeURIComponent(id)) : '';
+        fetchEvents('/events' + q, 'GET /events' + q);
+    }
+    function loadLate() { fetchEvents('/events/late', 'GET /events/late'); }
+    function clearTable() {
+        document.querySelector('#eventsTable tbody').innerHTML = '';
+        document.getElementById('eventCount').textContent = '';
+        showStatus('eventsStatus', true, 'View cleared (server data unchanged)');
+    }
+
+    loadEvents();
+</script>
+</body>
+</html>
