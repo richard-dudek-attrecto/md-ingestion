@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Architecture – Multi-Device Data Ingestion Prototype</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --panel: #1e293b;
+            --border: #334155;
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --accent: #38bdf8;
+            --green: #22c55e;
+            --amber: #fbbf24;
+            --red: #f87171;
+            --purple: #a78bfa;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        header {
+            padding: 28px 32px;
+            border-bottom: 1px solid var(--border);
+            background: var(--panel);
+        }
+        header h1 { margin: 0; font-size: 22px; }
+        header p { margin: 8px 0 0; color: var(--muted); font-size: 14px; max-width: 900px; }
+        main { max-width: 1080px; margin: 0 auto; padding: 28px 32px 60px; }
+        h2 { font-size: 18px; margin: 34px 0 12px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+        h3 { font-size: 15px; margin: 22px 0 8px; }
+        p, li { font-size: 14px; }
+        code {
+            background: #0b1220;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            padding: 1px 6px;
+            font-size: 12.5px;
+            font-family: ui-monospace, Menlo, monospace;
+        }
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px 20px;
+            margin: 16px 0;
+        }
+        .note {
+            border-left: 4px solid var(--amber);
+            background: rgba(251, 191, 36, .08);
+        }
+        .note strong { color: var(--amber); }
+        .diagram-wrap { overflow-x: auto; padding: 8px 0; }
+        table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+        th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+        th { color: var(--muted); }
+        .muted { color: var(--muted); }
+        .tag { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+        .ON_TIME { background: rgba(34,197,94,.15); color: var(--green); }
+        .OUT_OF_ORDER { background: rgba(251,191,36,.15); color: var(--amber); }
+        .LATE { background: rgba(248,113,113,.15); color: var(--red); }
+        ul { margin: 8px 0; }
+        ol { margin: 8px 0; }
+        .pill {
+            display: inline-block; font-size: 11px; font-weight: 600;
+            padding: 2px 9px; border-radius: 999px; margin-left: 8px;
+            background: rgba(167,139,250,.15); color: var(--purple);
+        }
+        svg text { font-family: system-ui, sans-serif; }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Multi-Device Data Ingestion Prototype — Architecture</h1>
+    <p>Spring Boot (Java 21) service that ingests telemetry from heterogeneous devices, normalizes each
+        device-specific payload into one common model, classifies late / out-of-order data, and publishes
+        the normalized stream to a downstream sink.</p>
+</header>
+
+<main>
+
+    <h2>1. System model</h2>
+    <div class="diagram-wrap">
+        <!-- ============ ARCHITECTURE SVG ============ -->
+        <svg width="1020" height="560" viewBox="0 0 1020 560" role="img"
+             aria-label="Architecture diagram of the ingestion pipeline">
+            <defs>
+                <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                    <path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8"/>
+                </marker>
+                <marker id="arrowAmber" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                    <path d="M0,0 L8,3 L0,6 Z" fill="#fbbf24"/>
+                </marker>
+                <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                    <path d="M0,0 L8,3 L0,6 Z" fill="#38bdf8"/>
+                </marker>
+            </defs>
+
+            <!-- Devices -->
+            <rect x="20" y="60" width="150" height="52" rx="8" fill="#0b1220" stroke="#6c8ebf"/>
+            <text x="95" y="82" fill="#dae8fc" font-size="12" font-weight="700" text-anchor="middle">Numeric device</text>
+            <text x="95" y="99" fill="#94a3b8" font-size="11" text-anchor="middle">Temperature DTO</text>
+
+            <rect x="20" y="150" width="150" height="52" rx="8" fill="#0b1220" stroke="#6c8ebf"/>
+            <text x="95" y="172" fill="#dae8fc" font-size="12" font-weight="700" text-anchor="middle">Bursty device</text>
+            <text x="95" y="189" fill="#94a3b8" font-size="11" text-anchor="middle">Vibration DTO (array)</text>
+
+            <!-- Controller -->
+            <rect x="230" y="105" width="150" height="52" rx="8" fill="#0b1220" stroke="#82b366"/>
+            <text x="305" y="127" fill="#d5e8d4" font-size="12" font-weight="700" text-anchor="middle">IngestionController</text>
+            <text x="305" y="144" fill="#94a3b8" font-size="11" text-anchor="middle">POST /api/v1/ingest/*</text>
+
+            <!-- IngestionService big box -->
+            <rect x="230" y="215" width="620" height="180" rx="10" fill="#111c30" stroke="#334155"/>
+            <text x="248" y="238" fill="#e2e8f0" font-size="13" font-weight="700">IngestionService (orchestrator)</text>
+
+            <!-- Step 1 registry+strategy -->
+            <rect x="250" y="255" width="260" height="52" rx="8" fill="#0b1220" stroke="#d6b656"/>
+            <text x="380" y="276" fill="#fff2cc" font-size="12" font-weight="700" text-anchor="middle">1 · IngestionStrategyRegistry</text>
+            <text x="380" y="293" fill="#94a3b8" font-size="11" text-anchor="middle">DeviceIngestionStrategy&lt;T&gt;.normalize()</text>
+
+            <!-- Step 2 policy -->
+            <rect x="250" y="323" width="260" height="52" rx="8" fill="#0b1220" stroke="#9673a6"/>
+            <text x="380" y="344" fill="#e1d5e7" font-size="12" font-weight="700" text-anchor="middle">2 · WatermarkLateArrivalPolicy</text>
+            <text x="380" y="361" fill="#94a3b8" font-size="11" text-anchor="middle">per-device watermark → classify</text>
+
+            <!-- Step 3 sink -->
+            <rect x="560" y="255" width="270" height="52" rx="8" fill="#0b1220" stroke="#b85450"/>
+            <text x="695" y="276" fill="#f8cecc" font-size="12" font-weight="700" text-anchor="middle">3 · TelemetrySink.publish()</text>
+            <text x="695" y="293" fill="#94a3b8" font-size="11" text-anchor="middle">pure write boundary</text>
+
+            <!-- Normalized event note -->
+            <rect x="560" y="323" width="270" height="52" rx="8" fill="#0b1220" stroke="#d79b00"/>
+            <text x="695" y="344" fill="#ffe6cc" font-size="12" font-weight="700" text-anchor="middle">NormalizedTelemetryEvent</text>
+            <text x="695" y="361" fill="#94a3b8" font-size="11" text-anchor="middle">unified internal model</text>
+
+            <!-- Store -->
+            <rect x="360" y="440" width="230" height="56" rx="8" fill="#0b1220" stroke="#b85450"/>
+            <text x="475" y="463" fill="#f8cecc" font-size="12" font-weight="700" text-anchor="middle">InMemoryTelemetryStore</text>
+            <text x="475" y="480" fill="#94a3b8" font-size="11" text-anchor="middle">main buffer + late buffer</text>
+
+            <!-- Inspection (testing only) -->
+            <rect x="650" y="435" width="330" height="66" rx="8" fill="#1a1206" stroke="#fbbf24" stroke-dasharray="6 4"/>
+            <text x="815" y="458" fill="#fbbf24" font-size="12" font-weight="700" text-anchor="middle">TelemetryInspection Service / Controller</text>
+            <text x="815" y="475" fill="#fbbf24" font-size="11" text-anchor="middle" font-weight="700">⚠ TESTING / VISUALISATION ONLY</text>
+            <text x="815" y="491" fill="#94a3b8" font-size="11" text-anchor="middle">GET /api/v1/events · /events/late</text>
+
+            <!-- Future downstream (dashed) -->
+            <rect x="650" y="150" width="330" height="60" rx="8" fill="#0b1220" stroke="#38bdf8" stroke-dasharray="6 4"/>
+            <text x="815" y="174" fill="#38bdf8" font-size="12" font-weight="700" text-anchor="middle">Real downstream (future)</text>
+            <text x="815" y="192" fill="#94a3b8" font-size="11" text-anchor="middle">DB · Kafka · RabbitMQ · stream job</text>
+
+            <!-- Edges -->
+            <line x1="170" y1="86"  x2="228" y2="120" stroke="#94a3b8" marker-end="url(#arrow)"/>
+            <line x1="170" y1="176" x2="228" y2="140" stroke="#94a3b8" marker-end="url(#arrow)"/>
+            <line x1="305" y1="157" x2="305" y2="213" stroke="#94a3b8" marker-end="url(#arrow)"/>
+            <!-- step1 -> step2 -->
+            <line x1="380" y1="307" x2="380" y2="321" stroke="#94a3b8" marker-end="url(#arrow)"/>
+            <!-- step2 -> sink -->
+            <line x1="510" y1="330" x2="558" y2="290" stroke="#94a3b8" marker-end="url(#arrow)"/>
+            <!-- sink -> store -->
+            <path d="M 830 280 L 875 280 L 875 420 L 430 420 L 430 440" stroke="#94a3b8" fill="none" marker-end="url(#arrow)"/>
+            <text x="672" y="404" fill="#94a3b8" font-size="10">publish</text>
+            <!-- store -> inspection (testing) -->
+            <line x1="590" y1="470" x2="648" y2="470" stroke="#fbbf24" marker-end="url(#arrowAmber)"/>
+            <text x="600" y="462" fill="#fbbf24" font-size="10">read</text>
+            <!-- sink -> future downstream (dashed) -->
+            <line x1="760" y1="253" x2="812" y2="212" stroke="#38bdf8" stroke-dasharray="5 4" marker-end="url(#arrowBlue)"/>
+            <text x="772" y="238" fill="#38bdf8" font-size="10">swap sink impl</text>
+        </svg>
+        <!-- ============ /ARCHITECTURE SVG ============ -->
+    </div>
+
+    <div class="card note">
+        <strong>⚠ Note — the inspection layer is testing only.</strong>
+        <p style="margin:6px 0 0">The <code>TelemetryInspectionService</code> and
+            <code>TelemetryInspectionController</code> (endpoints <code>GET /api/v1/events</code> and
+            <code>/api/v1/events/late</code>) exist <em>solely to visualize</em> the in-memory buffer from the
+            browser test console. They are <strong>not</strong> part of the production downstream contract.
+            In a real deployment nothing "reads back" from the pipeline over HTTP — a downstream system consumes
+            the events from the sink (see section 4).</p>
+    </div>
+
+    <h2>2. Request flow</h2>
+    <ol>
+        <li>A device posts a raw payload to <code>IngestionController</code>
+            (<code>/ingest/temperature</code> or <code>/ingest/vibration</code>).</li>
+        <li><code>IngestionService</code> resolves the matching <code>DeviceIngestionStrategy</code> via the
+            <code>IngestionStrategyRegistry</code> and normalizes the payload into one or more
+            <code>NormalizedTelemetryEvent</code>s. Bursty payloads fan out to one event per sample.</li>
+        <li><code>WatermarkLateArrivalPolicy</code> classifies each event against the per-device watermark.</li>
+        <li>Each classified event is handed to <code>TelemetrySink.publish()</code> — the downstream boundary.</li>
+        <li>The in-memory sink forwards events to <code>InMemoryTelemetryStore</code>. The
+            <span class="pill">testing-only</span> inspection layer reads that store for visualization.</li>
+    </ol>
+
+    <h2>3. Lateness / out-of-order handling</h2>
+    <p>Each device keeps its own <strong>watermark</strong> = the highest event timestamp seen so far
+        (monotonic, never decreases). Every incoming event is compared to it:</p>
+    <table>
+        <tr><th>Condition</th><th>Classification</th></tr>
+        <tr><td><code>timestamp &ge; watermark</code> (equal counts as on-time)</td><td><span class="tag ON_TIME">ON_TIME</span></td></tr>
+        <tr><td><code>timestamp &lt; watermark</code>, within <code>ingestion.allowed-lateness</code></td><td><span class="tag OUT_OF_ORDER">OUT_OF_ORDER</span></td></tr>
+        <tr><td>older than the allowed-lateness window</td><td><span class="tag LATE">LATE</span></td></tr>
+    </table>
+    <p>The classification is stamped onto the event (<code>isLate</code> + <code>metrics.lateness</code>) so it
+        travels with the data. Tolerance is configurable via <code>ingestion.allowed-lateness</code> (default
+        <code>PT30S</code>).</p>
+    <p class="muted"><em>Known nuance:</em> because a vibration burst is currently fanned out into per-sample
+        timestamps (<code>recordedAt + index·100ms</code>) and the watermark advances per sample, re-sending the
+        same burst flags earlier samples as <span class="tag OUT_OF_ORDER">OUT_OF_ORDER</span> while the last one
+        stays <span class="tag ON_TIME">ON_TIME</span>. Evaluating lateness <em>per burst</em> instead of per
+        sample is a natural refinement (see next section).</p>
+
+    <h2>4. Suggested next steps for developers</h2>
+
+    <h3>Replace the in-memory sink with a real downstream <span class="pill">highest impact</span></h3>
+    <p>The whole point of the <code>TelemetrySink</code> interface is that the destination is swappable without
+        touching the controller, strategies, or policy. Provide a new implementation and delete/deactivate the
+        in-memory one:</p>
+    <ul>
+        <li><strong>Relational DB (JPA):</strong> a <code>JpaTelemetrySink</code> that persists each
+            <code>NormalizedTelemetryEvent</code> to Postgres/MySQL. Good for querying and audit.</li>
+        <li><strong>Apache Kafka:</strong> a <code>KafkaTelemetrySink</code> using <code>KafkaTemplate</code> to
+            publish to a topic (e.g. keyed by <code>deviceId</code> for ordering). Best fit for high-throughput
+            streaming and multiple independent consumers.</li>
+        <li><strong>RabbitMQ / JMS:</strong> a <code>RabbitTelemetrySink</code> for classic message-queue
+            fan-out and work-queue semantics.</li>
+        <li><strong>Cloud streams:</strong> AWS Kinesis / managed Kafka via the same pattern.</li>
+    </ul>
+    <p>Route <span class="tag LATE">LATE</span> events to a dedicated topic / dead-letter queue / table so they
+        can be reprocessed or audited separately.</p>
+
+    <h3>Retire the inspection layer for production</h3>
+    <p>Once a real sink is in place, remove or guard the <code>inspection</code> package behind a Spring profile
+        (e.g. <code>@Profile("dev")</code>) so the visualization endpoints never ship to production.</p>
+
+    <h3>Other refinements</h3>
+    <ul>
+        <li><strong>Per-burst lateness:</strong> classify a vibration burst once against <code>recordedAt</code>
+            and stamp all its samples equally (fixes the per-sample nuance above).</li>
+        <li><strong>Bounded buffers / back-pressure:</strong> the in-memory store is unbounded; a production sink
+            needs bounding, batching, or async publishing.</li>
+        <li><strong>Idempotency &amp; dedup:</strong> use <code>eventId</code> / a natural key to drop duplicates
+            on re-send.</li>
+        <li><strong>Reordering window:</strong> add a buffered, time-windowed re-sort for out-of-order events
+            before downstream delivery if consumers require ordering.</li>
+        <li><strong>Observability:</strong> Micrometer metrics (counts per <code>DeviceType</code> / lateness),
+            structured logging, tracing.</li>
+        <li><strong>Schema &amp; versioning:</strong> version the DTOs and the normalized model for evolving devices.</li>
+        <li><strong>Persistence of watermarks:</strong> currently in-process; externalize (Redis/DB) for
+            multi-instance deployments.</li>
+    </ul>
+
+    <h2>5. Extensibility — adding a new device type</h2>
+    <p>No changes to existing code (Open-Closed):</p>
+    <ol>
+        <li>Add a value to <code>DeviceType</code>.</li>
+        <li>Add a DTO in the <code>dto</code> package.</li>
+        <li>Implement <code>DeviceIngestionStrategy&lt;NewDto&gt;</code> as a <code>@Component</code>.</li>
+    </ol>
+    <p>Spring injects the new strategy into <code>IngestionStrategyRegistry</code> automatically.</p>
+
+</main>
+</body>
+</html>
