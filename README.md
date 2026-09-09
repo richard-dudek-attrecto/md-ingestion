@@ -33,8 +33,7 @@ Two device categories are supported out of the box:
                           GET /api/v1/events ◀──────────────────────────┘  browser test console
 ```
 
-See [`docs/architecture.html`](docs/architecture.html) for the full architecture document, including
-an SVG diagram, the lateness model, and developer next-steps.
+See the published architecture document at https://richard-dudek-attrecto.github.io/md-ingestion/architecture.html for the full architecture overview, including an SVG diagram, the lateness model, and developer next-steps.
 
 > ⚠️ **The inspection layer is for testing/visualization only.** The `inspection` package
 > (`TelemetryInspectionService` + `TelemetryInspectionController`, endpoints `GET /api/v1/events`
@@ -159,7 +158,7 @@ touching the controller, strategies, or policy:
 - Additional refinements: per-burst lateness evaluation, bounded buffers/back-pressure, idempotency
   via `eventId`, externalized watermarks (Redis/DB) for multi-instance deployments, and metrics.
 
-See [`docs/architecture.html`](docs/architecture.html) for the detailed diagram and rationale.
+See the published architecture document at https://richard-dudek-attrecto.github.io/md-ingestion/architecture.html for the detailed diagram and rationale.
 
 ## Tests
 
