@@ -1,6 +1,12 @@
 # Compiled class file
 *.class
 
+# Build output
+/target/
+
+# IDE metadata
+/.idea/
+
 # Log file
 *.log
 
